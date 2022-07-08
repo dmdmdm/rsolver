@@ -8,7 +8,7 @@
 #include <vector>
 #include <iostream>
 
-// Exit codes based on minisat
+// Same exit codes as minisat
 enum { EXIT_COMMAND_LINE_FAIL = 0, EXIT_CANNOT_READ_INPUT = 1, EXIT_CANNOT_PARSE_INPUT = 3, EXIT_SATISFIABLE = 10, EXIT_UNSATISFIABLE = 20 };
 
 static void usage()
