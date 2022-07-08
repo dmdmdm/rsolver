@@ -8,6 +8,9 @@ eg:
 
     echo 'a & b' | ./rsolver
     ./rsolver 'a & b'
+    
+# Output
+It will say either "Unstatisfied" or "Satisified with a=True b=True" (or whatever literals work)
      
 # Example Expressions
     a & ~b
