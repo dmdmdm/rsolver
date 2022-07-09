@@ -5,9 +5,10 @@ https://en.wikipedia.org/wiki/Satisfiability
 # Usage
 You can put the logic expression on the command line (in quotes) or send it via stdin
 eg:
-
-    echo 'a & b' | ./rsolver
+  
     ./rsolver 'a & b'
+    
+    echo 'a & b' | ./rsolver
     
 # Output
 It will say either "Unsatisfied" or "Satisfied with a=True b=True" (or whatever literals work)
@@ -15,8 +16,8 @@ It will say either "Unsatisfied" or "Satisfied with a=True b=True" (or whatever 
 # Example Expressions
     a & ~b
     x & ~x
-    mike & sally & ~peter
-    ~(mike & sally) & ~peter100
+    mike & sally | ~peter
+    ~(mike & sally) | ~peter100
        
 # Grammar
        <expr> = <clause> <op> <clause> <op> ...
