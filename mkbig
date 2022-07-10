@@ -1,4 +1,4 @@
-#!/bin/perl
+#!/bin/bin/perl
 
 $out = '';
 for $i (0..999) {
