@@ -9,8 +9,8 @@
 #include <iostream>
 
 // Same exit codes as minisat
-// Except it uses 10 for EXIT_SATISFIABLE
-enum { EXIT_COMMAND_LINE_FAIL = 0, EXIT_CANNOT_READ_INPUT = 1, EXIT_CANNOT_PARSE_INPUT = 3, EXIT_SATISFIABLE = 0, EXIT_UNSATISFIABLE = 20 };
+// (Except we use 0 for EXIT_SATISFIABLE and they use 10)
+enum { EXIT_COMMAND_LINE_FAIL = 0, EXIT_CANNOT_READ_INPUT = 1, EXIT_CANNOT_PARSE_INPUT = 3, EXIT_SATISFIABLE = 0, EXIT_SATISFIABLE_MINISAT = 10, EXIT_UNSATISFIABLE = 20 };
 
 static void usage()
 {
@@ -269,7 +269,7 @@ static std::string literalsWithoutValues(const Literals &frozen, const Literals 
 }
 
 static void printLiteralsWithoutValues(const Literals &frozen, const Literals &thawed) {
-	std::cout << "Literals: " << literalsWithoutValues(frozen, thawed) << std::endl;
+	std::cout << "Unique Literals: " << literalsWithoutValues(frozen, thawed) << std::endl;
 }
 
 // Of course a std::map<> would be faster but we need to maintain the order
@@ -634,13 +634,11 @@ static void parseAndSolveLine(const std::string &line) {
 	solve(tokens);
 }
 
-static void parseAndSolveFile(FILE *f)
-{
+static void parseAndSolveFile(FILE *f) {
 	parseAndSolveLine(readFile(f));
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	if (argc > 1) {
 		if (strcmp(argv[1], "-?") == 0) {
 			usage();
