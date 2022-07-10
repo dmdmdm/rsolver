@@ -45,60 +45,30 @@ static int gnBools = sizeof(gBools) / sizeof(gBools[0]);
 //-----------------------------------------------------------------------------
 // String Util
 
-enum { MAX_LINE = 5 * 1024 };
+enum { MAX_ERROR = 5 * 1024 };
 
-static size_t strlcat(char *dst, const char *src, const size_t bufsize) {
-	size_t		len_dst;
-	size_t		len_src;
-	size_t		len_result;
-
-	if (dst == NULL) return 0;
-	len_dst = len_result = strlen(dst);
-	if (src == NULL) return len_result;
-	len_src = strlen(src);
-	len_result += len_src;
-
-	if (len_dst + len_src >= bufsize) {
-		len_src = bufsize - (len_dst + 1);
-	}
-	
-	if (len_src > 0) {
-		memcpy(dst + len_dst, src, len_src);
-		dst[len_dst + len_src] = '\0';
-	}
-
-	return len_result;
-}
-
-static size_t strlcpy(char *dst, const char *src, const size_t bufsize) {
-	size_t		len;
-
-	if (src == NULL) return 0;
-	len = strlen(src);
-	if (dst == NULL) return len;
-
-	if (len >= bufsize) len = bufsize - 1;
-	memcpy(dst, src, len);
-	dst[len] = '\0';
-	return len;
-}
-
-void flatten(const int argc, char *argv[], const int optind, char *buf, const size_t size)
-{
-	buf[0] = '\0';
-
+static std::string flatten(const int argc, char *argv[], const int optind) {
+	std::string out;
 	for (int i = optind; i < argc; i++) {
-		if (buf[0]) strlcat(buf, " ", size);
-		strlcat(buf, argv[i], size);
+		if (!out.empty()) out += " ";
+		out += argv[i];
 	}
+	return out;
 }
 
-static void chomp(char *s) {
-	char	*p;
+static std::string readFile(FILE *f)
+{
+	std::string contents;
+	int c;
 
-	if ((p = strchr(s, '\n')) != NULL) {
-		*p = '\0';
+	for (;;)
+	{
+		if ((c = fgetc(f)) == EOF) break;
+		if (c == '\r') continue;
+		if (c == '\n') c = ' ';
+		contents += c;
 	}
+	return contents;
 }
 
 //-----------------------------------------------------------------------------
@@ -155,12 +125,13 @@ public:
 typedef std::vector<Token> Tokens;
 
 class Tokenizer {
-	char mszLine[MAX_LINE];
-	char *mpPosition = mszLine;
+	std::string mLine;
+	const char *mpPosition;
 
 public:
-	Tokenizer(const char *szLine) {
-		strlcpy(mszLine, szLine, sizeof(mszLine));
+	Tokenizer(const std::string &line) {
+		mLine = line;
+		mpPosition = mLine.c_str();
 	}
 
 	Token getToken() {
@@ -214,8 +185,8 @@ public:
 	}
 };
 
-static Tokens parseLine(const char *szLine) {
-	Tokenizer tokenizer(szLine);
+static Tokens parseLine(const std::string &line) {
+	Tokenizer tokenizer(line);
 	Tokens tokens;
 
 	for (;;) {
@@ -244,12 +215,12 @@ class Literal {
 	bool mValue;
 public:
 
-	Literal(const std::string name) {
+	Literal(const std::string &name) {
 		mName = name;
 		mValue = false;
 	}
 
-	bool isMatch(const std::string name) const {
+	bool isMatch(const std::string &name) const {
 		return name.compare(mName) == 0;
 	}
 
@@ -302,14 +273,14 @@ static void printLiteralsWithoutValues(const Literals &frozen, const Literals &t
 }
 
 // Of course a std::map<> would be faster but we need to maintain the order
-static Literals::const_iterator findLiteral(const Literals &literals, const std::string target) {
+static Literals::const_iterator findLiteral(const Literals &literals, const std::string &target) {
 	for (Literals::const_iterator it = literals.begin(); it != literals.end(); it++) {
 		if (it->isMatch(target)) return it;
 	}
 	return literals.end();
 }
 
-static Literals::const_iterator findLiteral(const Literals &frozen, const Literals &thawed, const std::string target) {
+static Literals::const_iterator findLiteral(const Literals &frozen, const Literals &thawed, const std::string &target) {
 	Literals::const_iterator it = findLiteral(frozen, target);
 	if (it != frozen.end()) return it;
 	
@@ -368,7 +339,7 @@ public:
 	}
 
 	void setError(const char *format, ...) {
-		char	buf[MAX_LINE];
+		char	buf[MAX_ERROR];
 		va_list         ap;
 		va_start(ap, format);
 		vsprintf(buf, format, ap);
@@ -533,8 +504,8 @@ public:
 		mError = "Not run yet";
 	}
 
-	void setError(const std::string e) {
-		mError = e;
+	void setError(const std::string &error) {
+		mError = error;
 	}
 
 	bool isError() const { return ! mError.empty(); }
@@ -646,7 +617,12 @@ static void solve(const Tokens &tokens) {
 //-----------------------------------------------------------------------------
 // Main
 
-static void parseAndSolveLine(const char *line) {
+static void parseAndSolveLine(const std::string &line) {
+	if (line.empty()) {
+		std::cerr << "Contents is empty -- cannot solve";
+		return;
+	}
+
 	const Tokens tokens = parseLine(line);
 	std::cout << "Parsed input: ";
 	printTokens(tokens);
@@ -658,16 +634,9 @@ static void parseAndSolveLine(const char *line) {
 	solve(tokens);
 }
 
-static void parseAndSolve(FILE *f)
+static void parseAndSolveFile(FILE *f)
 {
-	char	line[MAX_LINE+1];
-
-	for (;;)
-	{
-		if (fgets(line, sizeof(line), f) == NULL) break;
-		chomp(line);
-		parseAndSolveLine(line);
-	}
+	parseAndSolveLine(readFile(f));
 }
 
 int main(int argc, char *argv[])
@@ -678,11 +647,9 @@ int main(int argc, char *argv[])
 			return 0;
 		}
 
-		char line[MAX_LINE];
-		flatten(argc, argv, 1, line, sizeof(line));
-		parseAndSolveLine(line);
+		parseAndSolveLine(flatten(argc, argv, 1));
 	}
 
-	parseAndSolve(stdin);
+	parseAndSolveFile(stdin);
 	exit(0);
 }
