@@ -1,0 +1,9 @@
+#!/bin/perl
+
+$out = '';
+for $i (0..999) {
+	if (length($out) > 0) { $out .= ' & '; }
+	$out .= 'x' . sprintf('%03d', $i);
+}
+
+print "$out\n";
