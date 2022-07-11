@@ -18,7 +18,7 @@ rsolver: rsolver.o
 	$(CC) $(CFLAGS) -o $@ rsolver.o $(LDFLAGS)
 
 big_test.txt: mkbig
-	./mkbig > $@
+	perl mkbig > $@
 
 check: rsolver
 	./rsolver 'x & ~b & apple'
