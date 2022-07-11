@@ -32,6 +32,9 @@ static void usage()
 	exit(EXIT_COMMAND_LINE_FAIL);
 }
 
+static int gnEvals = 0;
+static int gnLookUps = 0;
+
 //-----------------------------------------------------------------------------
 // Bool Util
 
@@ -93,10 +96,11 @@ static std::string typeToString(const TokType type) {
 
 class Token {
 	TokType mType;
-	std::string mLiteral;
 	friend class Tokenizer;
 
 public:
+	std::string mLiteral;	// Public for speed
+
 	Token(const TokType type) {
 		mType = type;
 	}
@@ -110,7 +114,6 @@ public:
 	bool isEof() const { return mType == TT_Eof; }
 
 	TokType getType() const { return mType; }
-	std::string getLiteral() const { return mLiteral; }
 
 	std::string toString() const {
 		if (isLiteral()) {
@@ -273,32 +276,31 @@ static void printLiteralsWithoutValues(const Literals &frozen, const Literals &t
 }
 
 // Of course a std::map<> would be faster but we need to maintain the order
-static Literals::const_iterator findLiteral(const Literals &literals, const std::string &target) {
-	for (Literals::const_iterator it = literals.begin(); it != literals.end(); it++) {
+static Literals::const_iterator findLiteral(const Literals &frozen, const Literals &thawed, const std::string &target) {
+	gnLookUps++;
+
+	for (Literals::const_iterator it = frozen.begin(); it != frozen.end(); it++) {
 		if (it->isMatch(target)) return it;
 	}
-	return literals.end();
-}
 
-static Literals::const_iterator findLiteral(const Literals &frozen, const Literals &thawed, const std::string &target) {
-	Literals::const_iterator it = findLiteral(frozen, target);
-	if (it != frozen.end()) return it;
-	
-	return findLiteral(thawed, target);
+	for (Literals::const_iterator it = thawed.begin(); it != thawed.end(); it++) {
+		if (it->isMatch(target)) return it;
+	}
+	return thawed.end();
 }
 
 static Literals getLiterals(const Tokens &tokens) {
-	Literals literals;
+	Literals noLiterals;
+	Literals allLiterals;
 
 	for (Tokens::const_iterator it = tokens.begin(); it != tokens.end(); it++) {
 		if (it->isLiteral()) {
-			const std::string name = it->getLiteral();
-			if (findLiteral(literals, name) != literals.end()) continue;
-			Literal lit(name);
-			literals.push_back(lit);
+			if (findLiteral(noLiterals, allLiterals, it->mLiteral) != allLiterals.end()) continue;
+			Literal lit(it->mLiteral);
+			allLiterals.push_back(lit);
 		}
 	}
-	return literals;
+	return allLiterals;
 }
 
 static Literals butFirst(const Literals &in) {
@@ -352,7 +354,7 @@ public:
 	std::string getError() const { return mError; }
 
 	void setBool(const bool b) {
-		mError = "";
+		mError.clear();
 		mBoolResult = b;
 	}
 
@@ -401,10 +403,9 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 		 }
 	case TT_Literal:
 		{
-			const std::string name = it->getLiteral();
-			Literals::const_iterator litIt = findLiteral(frozen, thawed, name);
-			if (litIt  == thawed.end()) {
-				result.setError("Unknown literal %s", name.c_str());
+			const Literals::const_iterator litIt = findLiteral(frozen, thawed, it->mLiteral);
+			if (litIt == thawed.end()) {
+				result.setError("Unknown Literal %s", it->mLiteral.c_str());
 				return result;
 			}
 			result.setBool(litIt->getBool());
@@ -442,11 +443,11 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 	result.setError("Interal error in evalClause");
 	return result;
 }
-	
-static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const Literals &frozen, const Literals &thawed) {
-	EvalResult	result;
 
-	result = evalClause(tokens, it, frozen, thawed);
+static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const Literals &frozen, const Literals &thawed) {
+	gnEvals++;
+
+	EvalResult result = evalClause(tokens, it, frozen, thawed);
 	it++;
 	if (it == tokens.end()) { return result; }
 
@@ -512,14 +513,14 @@ public:
 
 	void setSatisfied(const Literals &frozen, const Literals &thawed) {
 		mSatisfied = true;
-		mError = "";
+		mError.clear();
 		mFrozen = frozen;
 		mThawed = thawed;
 	}
 
 	void setUnsat() {
 		mSatisfied = false;
-		mError = "";
+		mError.clear();
 		mFrozen.clear();
 		mThawed.clear();
 	}
@@ -556,13 +557,13 @@ static SolveResult solve(const Tokens &tokens, const Literals &frozenLiterals, c
 		return solveResult;
 	}
 
-	Literals frozen = appendFirst(frozenLiterals, thawedLiterals);
-	Literals thawed = butFirst(thawedLiterals);
+	Literals frozenNew = appendFirst(frozenLiterals, thawedLiterals);
+	const Literals thawedNew = butFirst(thawedLiterals);
 
-	const int frozenLast = frozen.size() - 1;
+	const int frozenNewLast = frozenNew.size() - 1;
 	for (int i = 0; i < gnBools; i++) {
-		frozen[frozenLast].setBool(gBools[i]);
-		SolveResult solveResult = solve(tokens, frozen, thawed);
+		frozenNew[frozenNewLast].setBool(gBools[i]);
+		SolveResult solveResult = solve(tokens, frozenNew, thawedNew);
 		if (solveResult.isSatisfied()) {
 			return solveResult;
 		}
@@ -600,6 +601,8 @@ static void solve(const Tokens &tokens) {
 
 	const SolveResult solveResult = solve(tokens, noLiterals, allLiterals);
 	std::cout << solveResult.toString() << std::endl;
+	std::cout << "Number of Evals: " << gnEvals << std::endl;
+	std::cout << "Number of Lookups: " << gnLookUps << std::endl;
 	
 	if (solveResult.isError()) {
 		exit(EXIT_CANNOT_PARSE_INPUT);
@@ -629,7 +632,7 @@ static void parseAndSolveLine(const std::string &line) {
 		return;
 	}
 
-	std::cout << "Parsed input: " << tokensToString(tokens) << std::endl;
+	std::cout << "Parsed Input: " << tokensToString(tokens) << std::endl;
 	solve(tokens);
 }
 
