@@ -198,13 +198,13 @@ static Tokens parseLine(const std::string &line) {
 	return tokens;
 }
 
-static void printTokens(const Tokens &tokens) {
+static std::string tokensToString(const Tokens &tokens) {
 	std::string out;
 	for (Tokens::const_iterator it = tokens.begin(); it != tokens.end(); it++) {
 		if (!out.empty()) out += " ";
 		out += it->toString();
 	}
-	std::cout << out << std::endl;
+	return out;
 }
 
 //-----------------------------------------------------------------------------
@@ -624,13 +624,12 @@ static void parseAndSolveLine(const std::string &line) {
 	}
 
 	const Tokens tokens = parseLine(line);
-	std::cout << "Parsed input: ";
-	printTokens(tokens);
 	if (tokens.size() == 0) {
 		std::cerr << "No tokens found -- cannot solve";
 		return;
 	}
 
+	std::cout << "Parsed input: " << tokensToString(tokens) << std::endl;
 	solve(tokens);
 }
 
