@@ -59,8 +59,7 @@ static std::string flatten(const int argc, char *argv[], const int optind) {
 	return out;
 }
 
-static std::string readFile(FILE *f)
-{
+static std::string readFile(FILE *f) {
 	std::string contents;
 	int c;
 
