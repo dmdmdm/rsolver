@@ -629,7 +629,7 @@ static void parseAndSolveLine(const std::string &line) {
 		return;
 	}
 
-	std::cout << "Parsed input: " << tokensToString(tokens) << std::endl;
+	std::cout << "Parsed Input: " << tokensToString(tokens) << std::endl;
 	solve(tokens);
 }
 
