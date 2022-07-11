@@ -444,9 +444,7 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 }
 	
 static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const Literals &frozen, const Literals &thawed) {
-	EvalResult	result;
-
-	result = evalClause(tokens, it, frozen, thawed);
+	EvalResult result = evalClause(tokens, it, frozen, thawed);
 	it++;
 	if (it == tokens.end()) { return result; }
 
