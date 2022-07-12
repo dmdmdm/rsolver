@@ -216,7 +216,7 @@ static std::string tokensToString(const Tokens &tokens) {
 typedef std::vector<std::string> LitNames;
 typedef std::vector<bool> LitValues;
 
-static int findLitName(const LitNames *pNames, const std::string &target) {
+inline int findLitName(const LitNames *pNames, const std::string &target) {
 	gnLookUps++;
 	for (int i = 0; i < (int)pNames->size(); i++) {
 		if (pNames->at(i).compare(target) == 0) return i;
