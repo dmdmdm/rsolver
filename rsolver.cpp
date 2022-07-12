@@ -217,7 +217,8 @@ typedef std::vector<bool> LitValues;
 
 inline int findLitName(const LitNames *pNames, const std::string &target) {
 	gnLookUps++;
-	for (int i = 0; i < (int)pNames->size(); i++) {
+	const int n = (int)pNames->size();
+	for (int i = 0; i < n; i++) {
 		if (pNames->at(i).compare(target) == 0) return i;
 	}
 	return -1;
