@@ -6,6 +6,7 @@
 #include <string>
 #include <string.h>
 #include <vector>
+#include<bits/stdc++.h>
 #include <iostream>
 
 // Same exit codes as minisat
@@ -216,10 +217,10 @@ typedef std::vector<std::string> LitNames;
 typedef std::vector<bool> LitValues;
 
 inline int findLitName(const LitNames *pNames, const std::string &target) {
-	gnLookUps++;
 	const int n = (int)pNames->size();
 	for (int i = 0; i < n; i++) {
 		if (pNames->at(i).compare(target) == 0) return i;
+		// compare() is faster than ==
 	}
 	return -1;
 }
@@ -252,16 +253,20 @@ static LitNames getLitNames(const Tokens &tokens) {
 
 class WorkingValues {
 	const LitNames	*mpNames;
+	int			mnNames;	// This is mpNames->size()  We redundantly keep it here for speed
 	LitValues	mValues;
 	int			mStartOfThawed;
 
-	void initValues() {
-		if (mpNames == nullptr) {
-			mValues.clear();
-			return;
-		}
+	void initNumberOfNames() {
+		mnNames = 0;
+		if (mpNames == nullptr) return;
+		mnNames = (int) mpNames->size();
+	}
 
-		for (int i = 0; i < (int)mpNames->size(); i++) {
+	void initValues() {
+		mValues.clear();
+		if (mpNames == nullptr) return;
+		for (int i = 0; i < mnNames; i++) {
 			mValues.push_back(false);
 		}
 	}
@@ -278,35 +283,38 @@ class WorkingValues {
 public:
 	WorkingValues() {
 		mpNames = nullptr;
+		initNumberOfNames();
 		mValues.clear();
 		initStartOfThawed();
 	}
 
 	WorkingValues(const LitNames *pNames) {
 		mpNames = pNames;
+		initNumberOfNames();
 		initValues();
 		initStartOfThawed();
 	}
 
 	WorkingValues(const WorkingValues &other) {
 		mpNames = other.mpNames;
+		mnNames = other.mnNames;
 		mValues = other.mValues;
 		mStartOfThawed = other.mStartOfThawed;
 	}
 
 	void clear() {
 		mpNames = nullptr;
+		initNumberOfNames();
 		initValues();
 		initStartOfThawed();
 	}
 
 	void advance(const WorkingValues &in) {
 		mpNames = in.mpNames;
+		mnNames = in.mnNames;
 		mValues = in.mValues;
 		mStartOfThawed = in.mStartOfThawed + 1;
 	}
-
-	size_t size() const { return mValues.size(); }
 
 	size_t sizeThawed() const {
 		if (mValues.empty() || mStartOfThawed < 0) return 0;
@@ -321,8 +329,13 @@ public:
 		return mValues[i];
 	}
 
-	int findLitName(const std::string &target) const {
-		return ::findLitName(mpNames, target);
+	inline int findLitName(const std::string &target) const {
+		gnLookUps++;
+		for (int i = 0; i < mnNames; i++) {
+			if (mpNames->at(i).compare(target) == 0) return i;
+			// compare() is faster than ==
+		}
+		return -1;
 	}
 
 	std::string toString() const {
@@ -332,7 +345,7 @@ public:
 			return "mpNames is null";
 		}
 
-		for (int i = 0; i < (int)mpNames->size(); i++) {
+		for (int i = 0; i < mnNames; i++) {
 			if (!out.empty()) out += " ";
 			out += mpNames->at(i) + "=" + boolToString(mValues[i]);
 		}
