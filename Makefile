@@ -20,5 +20,14 @@ rsolver: rsolver.o
 big_test.txt: mkbig
 	perl mkbig > $@
 
+check_simple: rsolver
+	time ./rsolver '~(a & ~b)'
+
+check_medium: rsolver medium_test.txt
+	time ./rsolver < medium_test.txt
+
+check_big: rsolver big_test.txt
+	time ./rsolver < big_test.txt
+
 check: rsolver
-	 ./rsolver 'a & ~b & c & d & e & f & g & h & i & j & k & l & m & n & o & p & q & r & s & t & u & v & w'
+	time ./rsolver 'a & ~b & c & d & e & f & g & h & i & j & k & l & m & n & o & p & q & r & s & t & u & v & w'
