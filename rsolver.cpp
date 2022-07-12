@@ -6,7 +6,6 @@
 #include <string>
 #include <string.h>
 #include <vector>
-#include<bits/stdc++.h>
 #include <iostream>
 
 // Same exit codes as minisat
