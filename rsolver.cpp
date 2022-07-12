@@ -12,8 +12,7 @@
 // (Except we use 0 for EXIT_SATISFIABLE and they use 10)
 enum { EXIT_COMMAND_LINE_FAIL = 0, EXIT_CANNOT_READ_INPUT = 1, EXIT_CANNOT_PARSE_INPUT = 3, EXIT_SATISFIABLE = 0, EXIT_SATISFIABLE_MINISAT = 10, EXIT_UNSATISFIABLE = 20 };
 
-static void usage()
-{
+static void usage() {
 	std::cerr << "Usage: rsolver '<logic-expression>'\n"
 		"\n"
 		"A toy SAT (boolean SATisfiability) solver\n"
