@@ -25,7 +25,7 @@ static void usage()
 		"a & ~b\n"
 		"x & ~x\n"
 		"mike & sally & ~peter\n"
-		"~(mike & sally) & ~peter\n"
+		"~(mike & sally) & ~peter100\n"
 		"\n"
 		"The following are supported: &=and, |=or, ~=not, ()=brackets, letters=literals\n"
 		"There is no attempt at optimization or avoiding recursion\n";
@@ -389,7 +389,7 @@ public:
 	}
 };
 
-static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &, const WorkingValues &);
+static EvalResult eval(const Tokens &, Tokens::const_iterator &, const WorkingValues &);
 
 static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals) {
 	EvalResult result;
