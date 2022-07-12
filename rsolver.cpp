@@ -6,6 +6,7 @@
 #include <string>
 #include <string.h>
 #include <vector>
+#include <map>
 #include <iostream>
 
 // Same exit codes as minisat
@@ -32,8 +33,9 @@ static void usage()
 	exit(EXIT_COMMAND_LINE_FAIL);
 }
 
-static int gnEvals = 0;
-static int gnLookUps = 0;
+static const long ONE_MILLION = 1000000;
+static long gnEvals = 0;
+static long gnLookUps = 0;
 
 //-----------------------------------------------------------------------------
 // Bool Util
@@ -210,115 +212,134 @@ static std::string tokensToString(const Tokens &tokens) {
 }
 
 //-----------------------------------------------------------------------------
-// Literals
+// Literals Names and Values apart
 
-class Literal {
-	std::string mName;
-	bool mValue;
-public:
+typedef std::vector<std::string> LitNames;
+typedef std::vector<bool> LitValues;
 
-	Literal(const std::string &name) {
-		mName = name;
-		mValue = false;
-	}
-
-	bool isMatch(const std::string &name) const {
-		return name.compare(mName) == 0;
-	}
-
-	std::string getName() const { return mName; }
-
-	void setBool(const bool b) { mValue = b; }
-	bool getBool() const { return mValue; }
-
-	std::string toString() const {
-		return mName + "=" + boolToString(mValue);
-	}
-};
-
-typedef std::vector<Literal> Literals;
-
-static std::string literalsToString(const Literals &frozen, const Literals &thawed) {
-	std::string out;
-
-	for (Literals::const_iterator it = frozen.begin(); it != frozen.end(); it++) {
-		if (!out.empty()) out += " ";
-		out += it->toString();
-	}
-
-	for (Literals::const_iterator it = thawed.begin(); it != thawed.end(); it++) {
-		if (!out.empty()) out += " ";
-		out += it->toString();
-	}
-
-	return out;
-}
-
-static std::string literalsWithoutValues(const Literals &frozen, const Literals &thawed) {
-	std::string out;
-
-	for (Literals::const_iterator it = frozen.begin(); it != frozen.end(); it++) {
-		if (!out.empty()) out += " ";
-		out += it->getName();
-	}
-
-	for (Literals::const_iterator it = thawed.begin(); it != thawed.end(); it++) {
-		if (!out.empty()) out += " ";
-		out += it->getName();
-	}
-
-	return out;
-}
-
-static void printLiteralsWithoutValues(const Literals &frozen, const Literals &thawed) {
-	std::cout << "Unique Literals: " << literalsWithoutValues(frozen, thawed) << std::endl;
-}
-
-// Of course a std::map<> would be faster but we need to maintain the order
-static Literals::const_iterator findLiteral(const Literals &frozen, const Literals &thawed, const std::string &target) {
+static int findLitName(const LitNames *pNames, const std::string &target) {
 	gnLookUps++;
-
-	for (Literals::const_iterator it = frozen.begin(); it != frozen.end(); it++) {
-		if (it->isMatch(target)) return it;
+	for (int i = 0; i < (int)pNames->size(); i++) {
+		if (pNames->at(i).compare(target) == 0) return i;
 	}
-
-	for (Literals::const_iterator it = thawed.begin(); it != thawed.end(); it++) {
-		if (it->isMatch(target)) return it;
-	}
-	return thawed.end();
+	return -1;
 }
 
-static Literals getLiterals(const Tokens &tokens) {
-	Literals noLiterals;
-	Literals allLiterals;
+static void printLitNames(const LitNames &names) {
+	std::string out;
+
+	for (LitNames::const_iterator it = names.begin(); it != names.end(); it++) {
+		if (!out.empty()) out += " ";
+		out += *it;
+	}
+
+	std::cout << "Unique Literals: " << out << std::endl;
+}
+
+static LitNames getLitNames(const Tokens &tokens) {
+	LitNames litnames;
 
 	for (Tokens::const_iterator it = tokens.begin(); it != tokens.end(); it++) {
 		if (it->isLiteral()) {
-			if (findLiteral(noLiterals, allLiterals, it->mLiteral) != allLiterals.end()) continue;
-			Literal lit(it->mLiteral);
-			allLiterals.push_back(lit);
+			if (findLitName(&litnames, it->mLiteral) >= 0) continue;
+			litnames.push_back(it->mLiteral);
 		}
 	}
-	return allLiterals;
+	return litnames;
 }
 
-static Literals butFirst(const Literals &in) {
-	Literals out;
+//-----------------------------------------------------------------------------
+// Working Literal Values
 
-	for (int i = 1; i < (int) in.size(); i++) {
-		out.push_back(in[i]);
+class WorkingValues {
+	const LitNames	*mpNames;
+	LitValues	mValues;
+	int			mStartOfThawed;
+
+	void initValues() {
+		if (mpNames == nullptr) {
+			mValues.clear();
+			return;
+		}
+
+		for (int i = 0; i < (int)mpNames->size(); i++) {
+			mValues.push_back(false);
+		}
 	}
 
-	return out;
-}
+	void initStartOfThawed() {
+		if (mValues.size() > 0) {
+			mStartOfThawed = 0;
+		}
+		else {
+			mStartOfThawed = -1;
+		}
+	}
 
-static Literals appendFirst(const Literals &base, const Literals &more) {
-	Literals out = base;
+public:
+	WorkingValues() {
+		mpNames = nullptr;
+		mValues.clear();
+		initStartOfThawed();
+	}
 
-	if (more.size() == 0) return base;
-	out.push_back(more[0]);
-	return out;
-}
+	WorkingValues(const LitNames *pNames) {
+		mpNames = pNames;
+		initValues();
+		initStartOfThawed();
+	}
+
+	WorkingValues(const WorkingValues &other) {
+		mpNames = other.mpNames;
+		mValues = other.mValues;
+		mStartOfThawed = other.mStartOfThawed;
+	}
+
+	void clear() {
+		mpNames = nullptr;
+		initValues();
+		initStartOfThawed();
+	}
+
+	void advance(const WorkingValues &in) {
+		mpNames = in.mpNames;
+		mValues = in.mValues;
+		mStartOfThawed = in.mStartOfThawed + 1;
+	}
+
+	size_t size() const { return mValues.size(); }
+
+	size_t sizeThawed() const {
+		if (mValues.empty() || mStartOfThawed < 0) return 0;
+		return mValues.size() - mStartOfThawed;
+	}
+
+	void setFrozenLastBool(const bool b) {
+		mValues[mStartOfThawed - 1] = b;
+	}
+
+	bool getBool(const int i) const {
+		return mValues[i];
+	}
+
+	int findLitName(const std::string &target) const {
+		return ::findLitName(mpNames, target);
+	}
+
+	std::string toString() const {
+		std::string out;
+
+		if (mpNames == nullptr) {
+			return "mpNames is null";
+		}
+
+		for (int i = 0; i < (int)mpNames->size(); i++) {
+			if (!out.empty()) out += " ";
+			out += mpNames->at(i) + "=" + boolToString(mValues[i]);
+		}
+		return out;
+	}
+};
 
 //-----------------------------------------------------------------------------
 // Eval
@@ -369,9 +390,9 @@ public:
 	}
 };
 
-static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &, const Literals &frozen, const Literals &thawed);
+static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &, const WorkingValues &);
 
-static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, const Literals &frozen, const Literals &thawed) {
+static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals) {
 	EvalResult result;
 
 	switch(it->getType()) {
@@ -392,7 +413,7 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 				return result;
 			 }
 
-			 const EvalResult right = evalClause(tokens, it, frozen, thawed);
+			 const EvalResult right = evalClause(tokens, it, literals);
 			 if (right.isError()) {
 				 return right;
 			 }
@@ -402,12 +423,12 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 		 }
 	case TT_Literal:
 		{
-			const Literals::const_iterator litIt = findLiteral(frozen, thawed, it->mLiteral);
-			if (litIt == thawed.end()) {
+			const int iLit = literals.findLitName(it->mLiteral);
+			if (iLit < 0) {
 				result.setError("Unknown Literal %s", it->mLiteral.c_str());
 				return result;
 			}
-			result.setBool(litIt->getBool());
+			result.setBool(literals.getBool(iLit));
 			return result;
 		}
 	case TT_OpenBracket:
@@ -418,7 +439,7 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 				return result;
 			}
 
-			const EvalResult right = eval(tokens, it, frozen, thawed);
+			const EvalResult right = eval(tokens, it, literals);
 
 			it++;
 			if (!it->isCloseBracket()) {
@@ -443,12 +464,18 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 	return result;
 }
 
-static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const Literals &frozen, const Literals &thawed) {
+static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals) {
 	gnEvals++;
 
-	EvalResult result = evalClause(tokens, it, frozen, thawed);
+	if ((gnEvals % ONE_MILLION) == 0) {
+		std::cerr << "Evals: " << gnEvals << std::endl;
+	}
+
+	EvalResult result = evalClause(tokens, it, literals);
 	it++;
-	if (it == tokens.end()) { return result; }
+	if (it == tokens.end()) {
+		return result;
+	}
 
 	for (; it != tokens.end(); it++) {
 		const TokType type2 = it->getType();
@@ -468,7 +495,7 @@ static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const L
 			return result;
 		}
 
-		const EvalResult right = evalClause(tokens, it, frozen, thawed);
+		const EvalResult right = evalClause(tokens, it, literals);
 		if (right.isError()) {
 			return right;
 		}
@@ -484,9 +511,9 @@ static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const L
 	return result;
 }
 
-static EvalResult eval(const Tokens &tokens, const Literals &frozen, const Literals &thawed) {
+static EvalResult eval(const Tokens &tokens, const WorkingValues &literals) {
 	Tokens::const_iterator it = tokens.begin();
-	return eval(tokens, it, frozen, thawed);
+	return eval(tokens, it, literals);
 }
 
 //-----------------------------------------------------------------------------
@@ -496,8 +523,7 @@ class SolveResult {
 public:
 	bool mSatisfied;
 	std::string mError;
-	Literals mFrozen;
-	Literals mThawed;
+	WorkingValues mLiterals;
 
 	SolveResult() {
 		mSatisfied = false;
@@ -510,18 +536,16 @@ public:
 
 	bool isError() const { return ! mError.empty(); }
 
-	void setSatisfied(const Literals &frozen, const Literals &thawed) {
+	void setSatisfied(const WorkingValues &literals) {
 		mSatisfied = true;
 		mError.clear();
-		mFrozen = frozen;
-		mThawed = thawed;
+		mLiterals = literals;
 	}
 
 	void setUnsat() {
 		mSatisfied = false;
 		mError.clear();
-		mFrozen.clear();
-		mThawed.clear();
+		mLiterals.clear();
 	}
 
 	bool isSatisfied() const { return mSatisfied; }
@@ -535,34 +559,33 @@ public:
 			return "Unstatisfied";
 		}
 
-		return "Satisfied with " + literalsToString(mFrozen, mThawed);
+		return "Satisfied with " + mLiterals.toString();
 	}
 };
 
-static SolveResult solve(const Tokens &tokens, const Literals &frozenLiterals, const Literals &thawedLiterals) {
+static SolveResult solve(const Tokens &tokens, const WorkingValues &literals) {
 	SolveResult solveResult;
-	const EvalResult evalResult = eval(tokens, frozenLiterals, thawedLiterals);
+	const EvalResult evalResult = eval(tokens, literals);
 	if (evalResult.isError()) {
 		solveResult.setError(evalResult.getError());
 		return solveResult;
 	}
 
 	if (evalResult.isSatisfied()) {
-		solveResult.setSatisfied(frozenLiterals, thawedLiterals);
+		solveResult.setSatisfied(literals);
 		return solveResult;
 	}
 
-	if (thawedLiterals.size() == 0) {
+	if (literals.sizeThawed() == 0) {
 		return solveResult;
 	}
 
-	Literals frozenNew = appendFirst(frozenLiterals, thawedLiterals);
-	const Literals thawedNew = butFirst(thawedLiterals);
+	WorkingValues litNew;
+   	litNew.advance(literals);
 
-	const int frozenNewLast = frozenNew.size() - 1;
 	for (int i = 0; i < gnBools; i++) {
-		frozenNew[frozenNewLast].setBool(gBools[i]);
-		SolveResult solveResult = solve(tokens, frozenNew, thawedNew);
+		litNew.setFrozenLastBool(gBools[i]);
+		const SolveResult solveResult = solve(tokens, litNew);
 		if (solveResult.isSatisfied()) {
 			return solveResult;
 		}
@@ -573,21 +596,21 @@ static SolveResult solve(const Tokens &tokens, const Literals &frozenLiterals, c
 }
 
 static void solve(const Tokens &tokens) {
-	const Literals noLiterals;
-	const Literals allLiterals = getLiterals(tokens);
+	const LitNames litnames = getLitNames(tokens);
 
-	if (allLiterals.size() == 0) {
+	if (litnames.size() == 0) {
 		std::cerr << "There are no literals -- nothing to solve" << std::endl;
 		exit(EXIT_CANNOT_PARSE_INPUT);
 	}
 
-	printLiteralsWithoutValues(noLiterals, allLiterals);
+	printLitNames(litnames);
 
 	//
 	// Eval once to check syntax
 	//
 
-	const EvalResult chkResult = eval(tokens, noLiterals, allLiterals);
+	WorkingValues literals(&litnames);
+	const EvalResult chkResult = eval(tokens, literals);
 	if (chkResult.isError()) {
 		std::cerr << "Formula has invalid syntax -- " << chkResult.toString() << std::endl;
 		exit(EXIT_CANNOT_PARSE_INPUT);
@@ -598,7 +621,7 @@ static void solve(const Tokens &tokens) {
 	// Now solve
 	//
 
-	const SolveResult solveResult = solve(tokens, noLiterals, allLiterals);
+	const SolveResult solveResult = solve(tokens, literals);
 	std::cout << solveResult.toString() << std::endl;
 	std::cout << "Number of Evals: " << gnEvals << std::endl;
 	std::cout << "Number of Lookups: " << gnLookUps << std::endl;
