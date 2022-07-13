@@ -7,8 +7,6 @@
 #include <string.h>
 #include <vector>
 #include <iostream>
-#include <chrono>
-#include <numeric>
 
 // Same exit codes as minisat
 // (Except we use 0 for EXIT_SATISFIABLE and they use 10)
