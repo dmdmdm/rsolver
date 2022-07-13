@@ -251,10 +251,10 @@ static LitNames getLitNames(const Tokens &tokens) {
 // Working Literal Values
 
 class WorkingValues {
-	const LitNames	*mpNames;
-	int			mnNames;	// This is mpNames->size()  We redundantly keep it here for speed
+	const LitNames	*mpNames;	// This is a pointer so we don't copy all the names when we are cloned
+	int		mnNames;	// This is mpNames->size()  We redundantly keep it here for speed
 	LitValues	mValues;
-	int			mStartOfThawed;
+	int		mStartOfThawed;
 
 	void initNumberOfNames() {
 		mnNames = 0;
