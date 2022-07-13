@@ -33,6 +33,7 @@ static void usage() {
 
 static const long ONE_MILLION = 1000000;
 static long gnEvals = 0;
+static long gnMaxDepth = 0;
 static long gnLookUps = 0;
 
 //-----------------------------------------------------------------------------
@@ -212,14 +213,15 @@ static std::string tokensToString(const Tokens &tokens) {
 //-----------------------------------------------------------------------------
 // Literals Names and Values apart
 
+// Points to the literal in Tokens
 typedef std::vector<std::string> LitNames;
+
 typedef std::vector<bool> LitValues;
 
 inline int findLitName(const LitNames *pNames, const std::string &target) {
 	const int n = (int)pNames->size();
 	for (int i = 0; i < n; i++) {
-		if (pNames->at(i).compare(target) == 0) return i;
-		// compare() is faster than ==
+		if (strcmp(pNames->at(i).c_str(), target.c_str()) == 0) return i;
 	}
 	return -1;
 }
@@ -331,8 +333,9 @@ public:
 	inline int findLitName(const std::string &target) const {
 		gnLookUps++;
 		for (int i = 0; i < mnNames; i++) {
-			if (mpNames->at(i).compare(target) == 0) return i;
+			if (strcmp(mpNames->at(i).c_str(), target.c_str()) == 0) return i;
 			// compare() is faster than ==
+			// strcmp() is faster than compare()
 		}
 		return -1;
 	}
@@ -401,9 +404,9 @@ public:
 	}
 };
 
-static EvalResult eval(const Tokens &, Tokens::const_iterator &, const WorkingValues &);
+static EvalResult eval(const Tokens &, Tokens::const_iterator &, const WorkingValues &, const int depth);
 
-static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals) {
+static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals, const int depth) {
 	EvalResult result;
 
 	switch(it->getType()) {
@@ -424,7 +427,7 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 				return result;
 			 }
 
-			 const EvalResult right = evalClause(tokens, it, literals);
+			 const EvalResult right = evalClause(tokens, it, literals, depth + 1);
 			 if (right.isError()) {
 				 return right;
 			 }
@@ -450,7 +453,7 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 				return result;
 			}
 
-			const EvalResult right = eval(tokens, it, literals);
+			const EvalResult right = eval(tokens, it, literals, depth + 1);
 
 			it++;
 			if (!it->isCloseBracket()) {
@@ -475,14 +478,18 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 	return result;
 }
 
-static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals) {
+static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals, const int depth) {
 	gnEvals++;
 
 	if ((gnEvals % ONE_MILLION) == 0) {
 		std::cerr << "Evals: " << gnEvals << std::endl;
 	}
 
-	EvalResult result = evalClause(tokens, it, literals);
+	if (depth > gnMaxDepth) {
+		gnMaxDepth = depth;
+	}
+
+	EvalResult result = evalClause(tokens, it, literals, depth + 1);
 	it++;
 	if (it == tokens.end()) {
 		return result;
@@ -506,7 +513,7 @@ static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const W
 			return result;
 		}
 
-		const EvalResult right = evalClause(tokens, it, literals);
+		const EvalResult right = evalClause(tokens, it, literals, depth + 1);
 		if (right.isError()) {
 			return right;
 		}
@@ -522,9 +529,9 @@ static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const W
 	return result;
 }
 
-static EvalResult eval(const Tokens &tokens, const WorkingValues &literals) {
+static EvalResult eval(const Tokens &tokens, const WorkingValues &literals, const int depth) {
 	Tokens::const_iterator it = tokens.begin();
-	return eval(tokens, it, literals);
+	return eval(tokens, it, literals, depth + 1);
 }
 
 //-----------------------------------------------------------------------------
@@ -574,10 +581,10 @@ public:
 	}
 };
 
-static SolveResult solve(const Tokens &tokens, const WorkingValues &literals) {
+static SolveResult solve(const Tokens &tokens, const WorkingValues &literals, const int depth) {
 	SolveResult solveResult;
-	
-	const EvalResult evalResult = eval(tokens, literals);
+
+	const EvalResult evalResult = eval(tokens, literals, depth + 1);
 	if (evalResult.isError()) {
 		solveResult.setError(evalResult.getError());
 		return solveResult;
@@ -597,7 +604,7 @@ static SolveResult solve(const Tokens &tokens, const WorkingValues &literals) {
 
 	for (int i = 0; i < gnBools; i++) {
 		litNew.setFrozenLastBool(gBools[i]);
-		const SolveResult solveResult = solve(tokens, litNew);
+		const SolveResult solveResult = solve(tokens, litNew, depth + 1);
 		if (solveResult.isSatisfied()) {
 			return solveResult;
 		}
@@ -607,7 +614,7 @@ static SolveResult solve(const Tokens &tokens, const WorkingValues &literals) {
 	return solveResult;
 }
 
-static void solve(const Tokens &tokens) {
+static void solve(const Tokens &tokens, const int depth) {
 	const LitNames litnames = getLitNames(tokens);
 
 	if (litnames.size() == 0) {
@@ -622,7 +629,7 @@ static void solve(const Tokens &tokens) {
 	//
 
 	WorkingValues literals(&litnames);
-	const EvalResult chkResult = eval(tokens, literals);
+	const EvalResult chkResult = eval(tokens, literals, depth + 1);
 	if (chkResult.isError()) {
 		std::cerr << "Formula has invalid syntax -- " << chkResult.toString() << std::endl;
 		exit(EXIT_CANNOT_PARSE_INPUT);
@@ -633,9 +640,10 @@ static void solve(const Tokens &tokens) {
 	// Now solve
 	//
 
-	const SolveResult solveResult = solve(tokens, literals);
+	const SolveResult solveResult = solve(tokens, literals, depth + 1);
 	std::cout << solveResult.toString() << std::endl;
-	std::cout << "Number of Evals: " << gnEvals << std::endl;
+	std::cout << "  Number of Evals: " << gnEvals << std::endl;
+	std::cout << "        Max Depth: " << gnMaxDepth << std::endl;
 	std::cout << "Number of Lookups: " << gnLookUps << std::endl;
 	
 	if (solveResult.isError()) {
@@ -667,7 +675,7 @@ static void parseAndSolveLine(const std::string &line) {
 	}
 
 	std::cout << "Parsed Input: " << tokensToString(tokens) << std::endl;
-	solve(tokens);
+	solve(tokens, 0);
 }
 
 static void parseAndSolveFile(FILE *f) {
