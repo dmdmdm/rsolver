@@ -576,6 +576,7 @@ public:
 
 static SolveResult solve(const Tokens &tokens, const WorkingValues &literals) {
 	SolveResult solveResult;
+	
 	const EvalResult evalResult = eval(tokens, literals);
 	if (evalResult.isError()) {
 		solveResult.setError(evalResult.getError());
