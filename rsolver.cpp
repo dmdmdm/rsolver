@@ -213,9 +213,7 @@ static std::string tokensToString(const Tokens &tokens) {
 //-----------------------------------------------------------------------------
 // Literals Names and Values apart
 
-// Points to the literal in Tokens
 typedef std::vector<std::string> LitNames;
-
 typedef std::vector<bool> LitValues;
 
 inline int findLitName(const LitNames *pNames, const std::string &target) {
