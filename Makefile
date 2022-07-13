@@ -1,6 +1,6 @@
 CC = gcc
 LDFLAGS = -lstdc++
-CFLAGS = -g -I. -fno-rtti -fno-exceptions -Wall
+CFLAGS = -g -I. -fno-rtti -fno-exceptions -Wall -Ofast
 CPPFLAGS = $(CFLAGS)
 SOURCES = rsolver.cpp rsolver.h
 
