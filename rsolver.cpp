@@ -7,6 +7,8 @@
 #include <string.h>
 #include <vector>
 #include <iostream>
+#include <chrono>
+#include <numeric>
 
 // Same exit codes as minisat
 // (Except we use 0 for EXIT_SATISFIABLE and they use 10)
@@ -235,26 +237,23 @@ static void printLitNames(const LitNames &names) {
 	std::cout << "Unique Literals: " << out << std::endl;
 }
 
-static LitNames getLitNames(const Tokens &tokens) {
-	LitNames litnames;
-
+static void getLitNames(const Tokens &tokens, LitNames &litnames) {
 	for (Tokens::const_iterator it = tokens.begin(); it != tokens.end(); it++) {
 		if (it->isLiteral()) {
 			if (findLitName(&litnames, it->mLiteral) >= 0) continue;
 			litnames.push_back(it->mLiteral);
 		}
 	}
-	return litnames;
 }
 
 //-----------------------------------------------------------------------------
 // Working Literal Values
 
 class WorkingValues {
-	const LitNames	*mpNames;	// This is a pointer so we don't copy all the names when we are cloned
-	int		mnNames;	// This is mpNames->size()  We redundantly keep it here for speed
+	const LitNames	*mpNames; // This is a pointer so we don't copy all the names when we are cloned
+	int			mnNames;	// This is mpNames->size()  We redundantly keep it here for speed
 	LitValues	mValues;
-	int		mStartOfThawed;
+	int			mStartOfThawed;
 
 	void initNumberOfNames() {
 		mnNames = 0;
@@ -613,7 +612,8 @@ static SolveResult solve(const Tokens &tokens, const WorkingValues &literals, co
 }
 
 static void solve(const Tokens &tokens, const int depth) {
-	const LitNames litnames = getLitNames(tokens);
+	LitNames litnames;
+	getLitNames(tokens, litnames);
 
 	if (litnames.size() == 0) {
 		std::cerr << "There are no literals -- nothing to solve" << std::endl;
