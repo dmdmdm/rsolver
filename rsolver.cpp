@@ -353,7 +353,7 @@ public:
 
 	inline int findLitName(const std::string &target) const {
 		gnLookUps++;
-		auto it = mpMap->find(target);
+		const auto it = mpMap->find(target);
 		if (it == mpMap->end()) return -1;
 		return it->second;
 	}
