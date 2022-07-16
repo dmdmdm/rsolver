@@ -663,7 +663,7 @@ static void solve(const Tokens &tokens, const int depth) {
 
 	const SolveResult solveResult = solve(tokens, literals, depth + 1);
 	std::cout << solveResult.toString() << std::endl;
-	std::cout << "  Number of Evals: " << gnEvals << std::endl;
+	std::cout << "  Number of Evals: " << gnEvals / ONE_MILLION << "M\n";
 	std::cout << "        Max Depth: " << gnMaxDepth << std::endl;
 	std::cout << "Number of Lookups: " << gnLookUps << std::endl;
 	
