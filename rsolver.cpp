@@ -665,7 +665,7 @@ static void solve(const Tokens &tokens, const int depth) {
 	std::cout << solveResult.toString() << std::endl;
 	std::cout << "  Number of Evals: " << gnEvals / ONE_MILLION << "M\n";
 	std::cout << "        Max Depth: " << gnMaxDepth << std::endl;
-	std::cout << "Number of Lookups: " << gnLookUps << std::endl;
+	std::cout << "Number of Lookups: " << gnLookUps / ONE_MILLION << "M\n";
 	
 	if (solveResult.isError()) {
 		exit(EXIT_CANNOT_PARSE_INPUT);
