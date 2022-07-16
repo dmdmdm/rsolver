@@ -500,7 +500,7 @@ static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const W
 	gnEvals++;
 
 	if ((gnEvals % ONE_MILLION) == 0) {
-		std::cerr << "Evals: " << gnEvals << std::endl;
+		std::cerr << "Evals: " << gnEvals / ONE_MILLION << "M\n";
 	}
 
 	if (depth > gnMaxDepth) {
