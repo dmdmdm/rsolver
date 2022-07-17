@@ -6,7 +6,6 @@
 #include <string>
 #include <string.h>
 #include <vector>
-#include <variant>
 #include <iostream>
 
 // Same exit codes as minisat
@@ -43,10 +42,6 @@ static long gnMaxDepth = 0;
 
 inline std::string boolToString(const bool b) {
 	return b ? "True" : "False";
-}
-
-inline std::string boolToShortString(const bool b) {
-	return b ? "1" : "0";
 }
 
 static bool gBools[] = { true, false };
