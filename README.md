@@ -21,6 +21,7 @@ It will say either "Unsatisfied" or "Satisfied with a=True b=True" (or whatever 
        
 # Grammar
        <expr> = <clause> <op> <clause> <op> ...
+              = <clause>
      <clause> = ~ <clause>
               = <literal>
               = ( <expr> )
