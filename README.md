@@ -31,3 +31,4 @@ It will say either "Unsatisfied" or "Satisfied with a=True b=True" (or whatever 
 # Warning
 There is no attempt at optimization or avoiding recursion.
 So for complex input it will be slow or possibly stack overflow.
+Complexity is O(2^n) for n literals.
