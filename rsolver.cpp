@@ -6,7 +6,7 @@
 #include <string>
 #include <string.h>
 #include <vector>
-#include <unordered_map>
+#include <variant>
 #include <iostream>
 
 // Same exit codes as minisat
@@ -32,16 +32,21 @@ static void usage() {
 	exit(EXIT_COMMAND_LINE_FAIL);
 }
 
-static const long ONE_MILLION = 1000000;
+static const long KILO = 1000;
+static const long MEGA = KILO * KILO;
+static const long GIGA = MEGA * KILO;
 static long gnEvals = 0;
 static long gnMaxDepth = 0;
-static long gnLookUps = 0;
 
 //-----------------------------------------------------------------------------
 // Bool Util
 
-static std::string boolToString(const bool b) {
+inline std::string boolToString(const bool b) {
 	return b ? "True" : "False";
+}
+
+inline std::string boolToShortString(const bool b) {
+	return b ? "1" : "0";
 }
 
 static bool gBools[] = { true, false };
@@ -75,6 +80,26 @@ static std::string readFile(FILE *f) {
 	return contents;
 }
 
+static std::string prettyNumber(const long n) {
+	char	buf[30];
+
+	if (n >= GIGA) {
+		snprintf(buf, sizeof(buf), "%ld G", n / GIGA);
+		return buf;
+	}
+	else if (n >= MEGA) {
+		snprintf(buf, sizeof(buf), "%ld M", n / MEGA);
+		return buf;
+	}
+	else if (n >= KILO) {
+		snprintf(buf, sizeof(buf), "%ld K", n / KILO);
+		return buf;
+	}
+
+	snprintf(buf, sizeof(buf), "%ld", n);
+	return buf;
+}
+
 //-----------------------------------------------------------------------------
 // Parse
 
@@ -98,9 +123,10 @@ static std::string typeToString(const TokType type) {
 class Token {
 	TokType mType;
 	friend class Tokenizer;
+	std::string mLiteral;
+	int mLitIndex;
 
 public:
-	std::string mLiteral;	// Public for speed
 
 	Token(const TokType type) {
 		mType = type;
@@ -115,6 +141,13 @@ public:
 	bool isEof() const { return mType == TT_Eof; }
 
 	TokType getType() const { return mType; }
+
+	std::string getLiteral() const { return mLiteral; }
+	int getLitIndex() const { return mLitIndex; }
+
+	void setLitIndex(const int idx) {
+		mLitIndex = idx;
+	}
 
 	std::string toString() const {
 		if (isLiteral()) {
@@ -215,13 +248,12 @@ static std::string tokensToString(const Tokens &tokens) {
 // Literals Names and Values apart
 
 typedef std::vector<std::string> LitNames;
-typedef std::unordered_map<std::string,int> LitNamesMap;
 typedef std::vector<bool> LitValues;
 
-inline int findLitName(const LitNames *pNames, const std::string &target) {
-	const int n = (int)pNames->size();
+inline int findLitName(const LitNames &litnames, const std::string &target) {
+	const int n = (int)litnames.size();
 	for (int i = 0; i < n; i++) {
-		if (strcmp(pNames->at(i).c_str(), target.c_str()) == 0) return i;
+		if (strcmp(litnames[i].c_str(), target.c_str()) == 0) return i;
 	}
 	return -1;
 }
@@ -240,16 +272,19 @@ static void printLitNames(const LitNames &names) {
 static void getLitNames(const Tokens &tokens, LitNames &litnames) {
 	for (auto it = tokens.begin(); it != tokens.end(); it++) {
 		if (it->isLiteral()) {
-			if (findLitName(&litnames, it->mLiteral) >= 0) continue;
-			litnames.push_back(it->mLiteral);
+			if (findLitName(litnames, it->getLiteral()) >= 0) continue;
+			litnames.push_back(it->getLiteral());
 		}
 	}
 }
 
-static void makeLitNamesMap(const LitNames &litnames, LitNamesMap &map) {
-	const int n = (int)litnames.size();
-	for (int i = 0; i < n; i++) {
-		map[litnames[i]] = i;
+static void assignLiteralIndexes(Tokens &tokens, const LitNames &litnames) {
+	for (auto it = tokens.begin(); it != tokens.end(); it++) {
+		if (it->isLiteral()) {
+			const int idx = findLitName(litnames, it->getLiteral());
+			if (idx < 0) continue;
+			it->setLitIndex(idx);
+		}
 	}
 }
 
@@ -258,22 +293,14 @@ static void makeLitNamesMap(const LitNames &litnames, LitNamesMap &map) {
 
 class WorkingValues {
 	const LitNames	*mpNames; // This is a pointer so we don't copy all the names when we are cloned
-	const LitNamesMap	*mpMap; // This is a pointer so we don't copy all the names when we are cloned
-							  
-	int			mnNames;	// This is mpNames->size()  We redundantly keep it here for speed
 	LitValues	mValues;
 	int			mStartOfThawed;
-
-	void initNumberOfNames() {
-		mnNames = 0;
-		if (mpNames == nullptr) return;
-		mnNames = (int) mpNames->size();
-	}
 
 	void initValues() {
 		mValues.clear();
 		if (mpNames == nullptr) return;
-		for (int i = 0; i < mnNames; i++) {
+		const int n = (int)mpNames->size();
+		for (int i = 0; i < n; i++) {
 			mValues.push_back(false);
 		}
 	}
@@ -290,40 +317,30 @@ class WorkingValues {
 public:
 	WorkingValues() {
 		mpNames = nullptr;
-		mpMap = nullptr;
-		initNumberOfNames();
 		mValues.clear();
 		initStartOfThawed();
 	}
 
-	WorkingValues(const LitNames *pNames, const LitNamesMap *pMap) {
+	WorkingValues(const LitNames *pNames) {
 		mpNames = pNames;
-		mpMap = pMap;
-		initNumberOfNames();
 		initValues();
 		initStartOfThawed();
 	}
 
 	WorkingValues(const WorkingValues &other) {
 		mpNames = other.mpNames;
-		mpMap = other.mpMap;
-		mnNames = other.mnNames;
 		mValues = other.mValues;
 		mStartOfThawed = other.mStartOfThawed;
 	}
 
 	void clear() {
 		mpNames = nullptr;
-		mpMap = nullptr;
-		initNumberOfNames();
 		initValues();
 		initStartOfThawed();
 	}
 
 	void advance(const WorkingValues &in) {
 		mpNames = in.mpNames;
-		mpMap = in.mpMap;
-		mnNames = in.mnNames;
 		mValues = in.mValues;
 		mStartOfThawed = in.mStartOfThawed + 1;
 	}
@@ -341,23 +358,6 @@ public:
 		return mValues[i];
 	}
 
-	inline int findLitNameLinear(const std::string &target) const {
-		gnLookUps++;
-		for (int i = 0; i < mnNames; i++) {
-			if (strcmp(mpNames->at(i).c_str(), target.c_str()) == 0) return i;
-			// compare() is faster than ==
-			// strcmp() is faster than compare()
-		}
-		return -1;
-	}
-
-	inline int findLitName(const std::string &target) const {
-		gnLookUps++;
-		const auto it = mpMap->find(target);
-		if (it == mpMap->end()) return -1;
-		return it->second;
-	}
-
 	std::string toString() const {
 		std::string out;
 
@@ -365,17 +365,23 @@ public:
 			return "mpNames is null";
 		}
 
-		for (int i = 0; i < mnNames; i++) {
+		const int n = (int)mpNames->size();
+		for (int i = 0; i < n; i++) {
 			if (!out.empty()) out += " ";
 			out += mpNames->at(i) + "=" + boolToString(mValues[i]);
 		}
 		return out;
+	}
+
+	bool operator==(const WorkingValues &other) const {
+		return mValues == other.mValues;
 	}
 };
 
 //-----------------------------------------------------------------------------
 // Eval
 //    <expr> = <clause> <op> <clause> <op> ...
+//           = <clause>
 //  <clause> = ~ <clause>
 //           = <literal>
 //           = ( <expr> )
@@ -422,6 +428,9 @@ public:
 	}
 };
 
+//-----------------------------------------------------------------------------
+// Eval
+
 static EvalResult eval(const Tokens &, Tokens::const_iterator &, const WorkingValues &, const int depth);
 
 static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals, const int depth) {
@@ -439,28 +448,28 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 		return result;
 	case TT_Not:
 		 {
-			 it++;
-			 if (it == tokens.end()) {
+			it++;
+			if (it == tokens.end()) {
 				result.setError("Expected something after a Not");
 				return result;
-			 }
+			}
 
-			 const EvalResult right = evalClause(tokens, it, literals, depth + 1);
-			 if (right.isError()) {
-				 return right;
-			 }
+			const EvalResult right = evalClause(tokens, it, literals, depth + 1);
+			if (right.isError()) {
+				return right;
+			}
 
-			 result.setBool(! right.getBool());
-			 return result;
+			result.setBool(! right.getBool());
+			return result;
 		 }
 	case TT_Literal:
 		{
-			const int iLit = literals.findLitName(it->mLiteral);
-			if (iLit < 0) {
-				result.setError("Unknown Literal %s", it->mLiteral.c_str());
+			const int idx = it->getLitIndex();
+			if (idx < 0) {
+				result.setError("Unknown Literal %s", it->getLiteral().c_str());
 				return result;
 			}
-			result.setBool(literals.getBool(iLit));
+			result.setBool(literals.getBool(idx));
 			return result;
 		}
 	case TT_OpenBracket:
@@ -497,12 +506,6 @@ static EvalResult evalClause(const Tokens &tokens, Tokens::const_iterator &it, c
 }
 
 static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const WorkingValues &literals, const int depth) {
-	gnEvals++;
-
-	if ((gnEvals % ONE_MILLION) == 0) {
-		std::cerr << "Evals: " << gnEvals / ONE_MILLION << "M\n";
-	}
-
 	if (depth > gnMaxDepth) {
 		gnMaxDepth = depth;
 	}
@@ -547,7 +550,13 @@ static EvalResult eval(const Tokens &tokens, Tokens::const_iterator &it, const W
 	return result;
 }
 
-static EvalResult eval(const Tokens &tokens, const WorkingValues &literals, const int depth) {
+static EvalResult evalMain(const Tokens &tokens, const WorkingValues &literals, const int depth) {
+	gnEvals++;
+
+	if ((gnEvals % MEGA) == 0) {
+		std::cerr << "Evals: " << prettyNumber(gnEvals) << std::endl;
+	}
+
 	auto it = tokens.begin();
 	return eval(tokens, it, literals, depth + 1);
 }
@@ -602,7 +611,7 @@ public:
 static SolveResult solve(const Tokens &tokens, const WorkingValues &literals, const int depth) {
 	SolveResult solveResult;
 
-	const EvalResult evalResult = eval(tokens, literals, depth + 1);
+	const EvalResult evalResult = evalMain(tokens, literals, depth + 1);
 	if (evalResult.isError()) {
 		solveResult.setError(evalResult.getError());
 		return solveResult;
@@ -632,11 +641,11 @@ static SolveResult solve(const Tokens &tokens, const WorkingValues &literals, co
 	return solveResult;
 }
 
-static void solve(const Tokens &tokens, const int depth) {
+static void solveMain(Tokens &tokens) {
+	const int depth = 0;
 	LitNames litnames;
-	LitNamesMap litnamesmap;
 	getLitNames(tokens, litnames);
-	makeLitNamesMap(litnames, litnamesmap);
+	assignLiteralIndexes(tokens, litnames);
 
 	if (litnames.size() == 0) {
 		std::cerr << "There are no literals -- nothing to solve" << std::endl;
@@ -649,8 +658,8 @@ static void solve(const Tokens &tokens, const int depth) {
 	// Eval once to check syntax
 	//
 
-	WorkingValues literals(&litnames, &litnamesmap);
-	const EvalResult chkResult = eval(tokens, literals, depth + 1);
+	WorkingValues literals(&litnames);
+	const EvalResult chkResult = evalMain(tokens, literals, depth + 1);
 	if (chkResult.isError()) {
 		std::cerr << "Formula has invalid syntax -- " << chkResult.toString() << std::endl;
 		exit(EXIT_CANNOT_PARSE_INPUT);
@@ -663,9 +672,8 @@ static void solve(const Tokens &tokens, const int depth) {
 
 	const SolveResult solveResult = solve(tokens, literals, depth + 1);
 	std::cout << solveResult.toString() << std::endl;
-	std::cout << "  Number of Evals: " << gnEvals / ONE_MILLION << "M\n";
-	std::cout << "        Max Depth: " << gnMaxDepth << std::endl;
-	std::cout << "Number of Lookups: " << gnLookUps / ONE_MILLION << "M\n";
+	std::cout << "  Number of Evals: " << prettyNumber(gnEvals) << std::endl;
+	std::cout << "        Max Depth: " << prettyNumber(gnMaxDepth) << std::endl;
 	
 	if (solveResult.isError()) {
 		exit(EXIT_CANNOT_PARSE_INPUT);
@@ -689,14 +697,14 @@ static void parseAndSolveLine(const std::string &line) {
 		return;
 	}
 
-	const Tokens tokens = parseLine(line);
+	Tokens tokens = parseLine(line);
 	if (tokens.size() == 0) {
 		std::cerr << "No tokens found -- cannot solve";
 		return;
 	}
 
 	std::cout << "Parsed Input: " << tokensToString(tokens) << std::endl;
-	solve(tokens, 0);
+	solveMain(tokens);
 }
 
 static void parseAndSolveFile(FILE *f) {
