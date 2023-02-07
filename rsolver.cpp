@@ -65,8 +65,7 @@ static std::string readFile(FILE *f) {
 	std::string contents;
 	int c;
 
-	for (;;)
-	{
+	for (;;) {
 		if ((c = fgetc(f)) == EOF) break;
 		if (c == '\r') continue;
 		if (c == '\n') c = ' ';
