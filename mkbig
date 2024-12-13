@@ -2,8 +2,8 @@
 
 $out = '';
 for $i (0..999) {
-	if (length($out) > 0) { $out .= ' & '; }
-	if ($i == 2) { $out .= '~ '; }
+	if (length($out)) { $out .= ' & ' }
+	if ($i == 2) { $out .= '~ ' }
 	$out .= 'x' . sprintf('%03d', $i);
 }
 
